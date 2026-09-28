@@ -43,18 +43,18 @@
 
   <launchable type="desktop-id">lightmorphic-text.desktop</launchable>
 
-  <url type="homepage">https://text.lightmorphic.com</url>
-  <url type="bugtracker">https://github.com/lightmorphic/text/issues</url>
-  <url type="vcs-browser">https://github.com/lightmorphic/text</url>
+  <url type="homepage">https://text.buildmorphic.com</url>
+  <url type="bugtracker">https://text.buildmorphic.com/bugs</url>
+  <url type="vcs-browser">https://text.buildmorphic.com/code</url>
 
   <screenshots>
     <screenshot type="default">
       <caption>Every snippet in one searchable list, with the editor beside it</caption>
-      <image>https://raw.githubusercontent.com/lightmorphic/text/main/docs/shots/main.png</image>
+      <image>https://text.buildmorphic.com/code/raw/docs/shots/main.png</image>
     </screenshot>
     <screenshot>
       <caption>The guided first run, including installing Espanso for a Wayland session</caption>
-      <image>https://raw.githubusercontent.com/lightmorphic/text/main/docs/shots/setup.png</image>
+      <image>https://text.buildmorphic.com/code/raw/docs/shots/setup.png</image>
     </screenshot>
   </screenshots>
 

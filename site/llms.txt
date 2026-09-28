@@ -7,5 +7,5 @@ Lightmorphic Ltd (UK company 17423646).
 
 - Website: https://text.lightmorphic.com/
 - Guide: https://text.lightmorphic.com/help.html
-- Source: https://github.com/lightmorphic/text
-- Download: https://github.com/lightmorphic/text/releases/latest/download/LightmorphicText-x86_64.AppImage
+- Source: https://text.buildmorphic.com/code
+- Download: https://text.buildmorphic.com/download/latest/LightmorphicText-x86_64.AppImage

@@ -27,7 +27,7 @@ Linux only, shipped as a single AppImage.
 ## Installing
 
 Download the AppImage from the
-[latest release](https://github.com/lightmorphic/text/releases/latest),
+[Buildmorphic](https://text.buildmorphic.com),
 make it executable, and run it:
 
 ```bash
@@ -106,11 +106,10 @@ and regenerates `docs/shots/`; it doubles as an end-to-end test.
 
 ## Releasing
 
-Bump `version` in `package.json`, add the matching section to `CHANGELOG.md`,
-and push to `main`. The release workflow builds the AppImage, publishes a
-GitHub Release with it and the update manifest attached, and running copies of
-the app offer the update themselves. Pushing again without a version bump does
-nothing.
+Bump `version` in `package.json` and add the matching section to
+`CHANGELOG.md`. `npm run build` makes the AppImage and `latest-linux.yml` in
+`dist/`; both go up to Buildmorphic as a release of the same version, and
+running copies of the app offer the update themselves.
 
 ## Licence
 

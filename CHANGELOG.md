@@ -3,6 +3,10 @@
 All notable changes to Lightmorphic Text are recorded here.
 This project follows [semantic versioning](https://semver.org).
 
+## [1.0.11] - 2026-09-28
+
+- Updates now come from Buildmorphic.
+
 ## [1.0.10] - 2026-09-06
 
 - Dark only: the light theme and everything that switched to it are gone.

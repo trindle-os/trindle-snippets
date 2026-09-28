@@ -16,8 +16,9 @@ problem before it's fixed.
 - Writes are confined to the Espanso match directory. Paths coming from the
   renderer are resolved and checked against it, so a crafted relative path
   cannot escape.
-- The only network requests are to `api.github.com` and
-  `github.com`: Espanso's official releases, and Lightmorphic Text's own update check.
+- The only network requests are to `api.github.com` and `github.com` for
+  Espanso's official releases, and to `text.buildmorphic.com` for Lightmorphic
+  Text's own update check.
   Nothing downloads without the user asking for it.
 - The one privileged action — adding the user to the `input` group on Wayland —
   goes through `pkexec`, so the desktop's own prompt asks for consent. Lightmorphic Text

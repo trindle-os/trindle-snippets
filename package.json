@@ -1,16 +1,16 @@
 {
   "name": "lightmorphic-text",
   "productName": "Lightmorphic Text",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "description": "A graphical front end for Espanso: browse, search, add and edit text expansions without touching YAML.",
   "main": "src/main/main.js",
   "desktopName": "lightmorphic-text.desktop",
   "license": "GPL-3.0-or-later",
   "author": "Lightmorphic",
-  "homepage": "https://text.lightmorphic.com",
+  "homepage": "https://text.buildmorphic.com",
   "repository": {
     "type": "git",
-    "url": "https://github.com/lightmorphic/text.git"
+    "url": "https://text.buildmorphic.com"
   },
   "scripts": {
     "start": "electron .",
@@ -24,9 +24,8 @@
       "appimage": "1.0.3"
     },
     "publish": {
-      "provider": "github",
-      "owner": "lightmorphic",
-      "repo": "text"
+      "provider": "generic",
+      "url": "https://text.buildmorphic.com/download/latest"
     },
     "artifactName": "LightmorphicText-${version}-${arch}.AppImage",
     "files": [

@@ -106,7 +106,7 @@ const UPDATE_DOT_LABELS = {
   available: 'Update available \u2014 click to download',
   downloading: 'Downloading',
   downloaded: 'Click to restart',
-  error: 'Can\u2019t connect to GitHub \u2014 click to try again',
+  error: 'Can\u2019t connect to Buildmorphic \u2014 click to try again',
 };
 
 let updateState = null;
@@ -153,7 +153,7 @@ window.lightmorphicText.onUpdateState((incoming) => {
     if (incoming.status === 'none' && window.flashTooltip) {
       window.flashTooltip(els.updateDot, 'No update available');
     } else if (incoming.status === 'error' && window.flashTooltip) {
-      window.flashTooltip(els.updateDot, 'Can\u2019t connect to GitHub');
+      window.flashTooltip(els.updateDot, 'Can\u2019t connect to Buildmorphic');
     }
   }
   show(els.updateWidget, true);

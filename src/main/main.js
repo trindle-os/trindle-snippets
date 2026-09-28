@@ -156,7 +156,7 @@ async function guardWrite(action) {
 }
 
 // ---------------------------------------------------------------------------
-// Updates: GitHub Releases for Lightmorphic Text itself, and nothing else. Nothing
+// Updates: Buildmorphic releases for Lightmorphic Text itself, and nothing else. Nothing
 // downloads until the user clicks the dot.
 // ---------------------------------------------------------------------------
 
