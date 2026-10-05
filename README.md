@@ -104,6 +104,14 @@ and regenerates `docs/shots/`; it doubles as an end-to-end test.
 `npx electron scripts/make-icon.js` regenerates the icon PNGs from
 `assets/icon.svg`.
 
+## Trindle plugin
+
+`packaging/trindle-plugin.sh [OUT_DIR]` builds Text as a Trindle plugin
+(interface 1): the folder `org.trindle.Text`, a `.tar.zst` of it, the Store
+description and icon. It checks the result with `trindle-plugin check`.
+Inside a plugin's box Text cannot read the keyboard or type into other
+windows, so it edits and copies snippets but Espanso does not run there.
+
 ## Releasing
 
 Bump `version` in `package.json` and add the matching section to

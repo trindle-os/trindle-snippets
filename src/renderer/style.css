@@ -391,6 +391,8 @@ textarea:focus-visible,
 
 .field { display: flex; flex-direction: column; min-height: 0; }
 .field-grow { flex: 1; }
+.field-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.35rem; }
+.field-head label { margin-bottom: 0; }
 .field label {
   font-size: 0.9375rem;
   font-weight: 600;

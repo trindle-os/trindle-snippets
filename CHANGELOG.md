@@ -3,6 +3,14 @@
 All notable changes to Lightmorphic Text are recorded here.
 This project follows [semantic versioning](https://semver.org).
 
+## [1.1.0] - 2026-10-05
+
+- A copy button beside the replacement text, to paste a snippet anywhere.
+- Text can be built as a Trindle plugin with `packaging/trindle-plugin.sh`.
+  In a Trindle plugin it is a snippet book: it edits and copies snippets,
+  but cannot expand them as you type, because a plugin cannot yet read the
+  keyboard or type into other windows.
+
 ## [1.0.11] - 2026-09-28
 
 - Updates now come from Buildmorphic.

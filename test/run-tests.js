@@ -380,6 +380,20 @@ matches:
     assert.ok(entries.length >= 1, 'the starter file should hold one example snippet');
   });
 
+  await test('as a Trindle plugin it looks for no Espanso and installs none', async () => {
+    const { execFileSync } = require('node:child_process');
+    const script = `const e = require(${JSON.stringify(path.join(__dirname, '..', 'src', 'main', 'espanso'))});
+      (async () => {
+        const env = await e.describeEnvironment();
+        let refused = false;
+        try { await e.install(); } catch { refused = true; }
+        console.log(JSON.stringify({ plugin: env.plugin, installed: env.installed, service: env.service, refused }));
+      })();`;
+    const out = execFileSync(process.execPath, ['-e', script], { env: { ...process.env, TEXT_PLUGIN: '1' } });
+    assert.deepStrictEqual(JSON.parse(String(out)),
+      { plugin: true, installed: false, service: 'unavailable', refused: true });
+  });
+
   console.log(`\n${passed} passed, ${failed} failed\n`);
   fs.rmSync(SANDBOX, { recursive: true, force: true });
   process.exit(failed === 0 ? 0 : 1);

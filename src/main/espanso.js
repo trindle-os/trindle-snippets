@@ -28,6 +28,11 @@ const RELEASES_API = 'https://api.github.com/repos/espanso/espanso/releases/late
 const X11_ASSET = 'Espanso-X11.AppImage';
 const WAYLAND_ASSET = 'espanso-debian-wayland-amd64.deb';
 
+// Set by the Trindle plugin's launcher. Inside a plugin's box there is no
+// keyboard device to read and no way to type into other windows, so Espanso
+// cannot run there: the app is a snippet book only, and installs nothing.
+const PLUGIN = process.env.TEXT_PLUGIN === '1';
+
 const HOME = os.homedir();
 const DATA_HOME = process.env.XDG_DATA_HOME || path.join(HOME, '.local', 'share');
 const CONFIG_HOME = process.env.XDG_CONFIG_HOME || path.join(HOME, '.config');
@@ -247,6 +252,13 @@ async function migrateLegacyData() {
 }
 
 async function describeEnvironment() {
+  if (PLUGIN) {
+    return {
+      plugin: true, session: detectSession(), distro: distroName(), immutable: false,
+      inInputGroup: false, installed: false, managed: false, binary: null, version: null,
+      service: 'unavailable', enabled: false, needsInputGroup: false, configDir: configDir(),
+    };
+  }
   await migrateLegacyData();
   const session = detectSession();
   const found = findEspanso();
@@ -568,6 +580,7 @@ async function ensureWaylandTools() {
 }
 
 async function install({ onProgress = () => {}, session = detectSession() } = {}) {
+  if (PLUGIN) throw new Error('Espanso cannot run inside a Trindle plugin yet.');
   const wantWayland = session === 'wayland';
   await fsp.rm(WORK_DIR, { recursive: true, force: true });
   await fsp.mkdir(WORK_DIR, { recursive: true });
@@ -803,6 +816,7 @@ async function addToInputGroup() {
 }
 
 module.exports = {
+  PLUGIN,
   MANAGED_BIN,
   MANAGED_LIB,
   UNIT_FILE,

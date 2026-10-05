@@ -14,6 +14,11 @@ if (process.stderr) process.stderr.on('error', () => {});
 const espanso = require('./espanso');
 const matches = require('./matches');
 
+// Run as a Trindle plugin: the plugin's box is the sandbox, Trindle keeps it
+// up to date and starts it from its ring, so the self-updater, the tray and
+// the namespace check all stand down.
+const PLUGIN = espanso.PLUGIN;
+
 // Chromium's sandbox needs either a SUID helper (which an AppImage cannot
 // carry) or unprivileged user namespaces. A few distros — Debian most
 // notably — ship with those disabled, and the resulting crash is a wall of
@@ -21,7 +26,7 @@ const matches = require('./matches');
 // wrong in plain words instead. This runs before app.whenReady(), early
 // enough that Chromium has not yet tried to fork anything sandboxed.
 (function checkSandboxSupport() {
-  if (process.platform !== 'linux') return;
+  if (process.platform !== 'linux' || PLUGIN) return;
   let value = null;
   try {
     value = fs.readFileSync('/proc/sys/kernel/unprivileged_userns_clone', 'utf8').trim();
@@ -161,7 +166,7 @@ async function guardWrite(action) {
 // ---------------------------------------------------------------------------
 
 function setupUpdates() {
-  if (!app.isPackaged) {
+  if (!app.isPackaged || PLUGIN) {
     // The dot still exists in a dev run; answer it honestly.
     ipcMain.handle('update-check', async () => ({ ok: false }));
     return;
@@ -253,7 +258,7 @@ async function setupTray() {
 app.whenReady().then(() => {
   createWindow();
   setupUpdates();
-  setupTray();
+  if (!PLUGIN) setupTray();
 });
 
 app.on('before-quit', () => { quitting = true; });
@@ -275,6 +280,7 @@ function failed(err) {
 ipcMain.handle('app-info', async () => ({
   version: app.getVersion(),
   packaged: app.isPackaged,
+  plugin: PLUGIN,
 }));
 
 // Held from the moment a crash-restart loop is noticed until Espanso next
@@ -534,13 +540,13 @@ ipcMain.handle('copy-text', async (event, text) => {
 });
 
 ipcMain.handle('update-download', async () => {
-  if (!app.isPackaged) return { ok: false };
+  if (!app.isPackaged || PLUGIN) return { ok: false };
   autoUpdater.downloadUpdate().catch(() => {});
   return { ok: true };
 });
 
 ipcMain.handle('update-install', async () => {
-  if (!app.isPackaged) return { ok: false };
+  if (!app.isPackaged || PLUGIN) return { ok: false };
   autoUpdater.quitAndInstall();
   return { ok: true };
 });

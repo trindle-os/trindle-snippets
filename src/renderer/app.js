@@ -15,7 +15,7 @@ const els = {};
   'setup-primary', 'setup-secondary',
   'screen-main', 'btn-new', 'search', 'list-count', 'entry-list',
   'edit-badge', 'edit-empty', 'edit-form', 'field-trigger', 'field-replace',
-  'field-replace-wrap', 'field-raw-wrap', 'field-raw', 'raw-reason', 'field-word', 'field-propagate',
+  'field-replace-wrap', 'btn-copy-replace', 'field-raw-wrap', 'field-raw', 'raw-reason', 'field-word', 'field-propagate',
   'field-file', 'edit-error', 'edit-success', 'btn-save', 'btn-cancel', 'btn-delete',
 ].forEach((id) => {
   els[id.replace(/-([a-z])/g, (m, c) => c.toUpperCase())] = document.getElementById(id);
@@ -127,11 +127,13 @@ function setRingProgress(fraction) {
   els.updateDotRingFill.style.strokeDashoffset = String(RING_CIRCUMFERENCE * (1 - clamped));
 }
 
-window.lightmorphicText.appInfo().then(({ version }) => {
+window.lightmorphicText.appInfo().then(({ version, plugin }) => {
   // Always the version actually running, so it only changes after a restart.
   els.updateWidgetVersion.textContent = `v${version}`;
   show(els.updateWidget, true);
-  setUpdateDot('current');
+  // As a Trindle plugin, Trindle brings the updates: the version stays, the dot goes.
+  if (plugin) show(els.updateDot, false);
+  else setUpdateDot('current');
 });
 
 // True from a click on the dot until the next answer arrives, so that a
@@ -321,6 +323,7 @@ function showScreen(which) {
 }
 
 function serviceWords(env) {
+  if (env.plugin) return ['unknown', 'Expanding as you type is not available here yet'];
   if (!env.installed) return ['unknown', 'Espanso not installed'];
   if (env.service === 'running') return ['running', 'Espanso running'];
   if (env.service === 'failing') return ['stopped', 'Espanso keeps stopping'];
@@ -342,6 +345,10 @@ function renderService(env) {
   els.btnPower.setAttribute('aria-label', label);
   els.btnPower.dataset.off = off ? 'true' : 'false';
   els.btnPower.disabled = !env.installed;
+  // In a Trindle plugin there is no Espanso to start, stop or show the folder of.
+  show(els.btnPower, !env.plugin);
+  show(els.btnRestart, !env.plugin);
+  show(els.btnOpenDir, !env.plugin);
 }
 
 async function refreshEnvironment() {
@@ -361,6 +368,13 @@ async function refreshEnvironment() {
 async function routeStartup({ allowSkip = false } = {}) {
   const env = await refreshEnvironment();
   if (!env) { showScreen('setup'); return; }
+
+  if (env.plugin) {
+    await window.lightmorphicText.ensureConfig();
+    showScreen('main');
+    await loadMatches();
+    return;
+  }
 
   if (!env.installed && !allowSkip) {
     showScreen('setup');
@@ -487,6 +501,12 @@ els.setupSecondary.addEventListener('click', async () => {
 
 els.btnCopyCommand.addEventListener('click', () => {
   window.lightmorphicText.copyText(els.setupCommandText.textContent);
+});
+
+els.btnCopyReplace.addEventListener('click', async () => {
+  if (!els.fieldReplace.value) return;
+  await window.lightmorphicText.copyText(els.fieldReplace.value);
+  if (window.flashTooltip) window.flashTooltip(els.btnCopyReplace, 'Copied');
 });
 
 window.lightmorphicText.onInstallProgress(({ step, fraction }) => {
@@ -770,6 +790,8 @@ function reportSave(result, what) {
     flashSuccess(`${what}, but Espanso would not reload. Try the restart button.`);
   } else if (result.restarted) {
     flashSuccess(`${what} and Espanso reloaded — it works right now.`);
+  } else if (state.env && state.env.plugin) {
+    flashSuccess(`${what}.`);
   } else {
     flashSuccess(`${what}. It will work once Espanso is running.`);
   }
