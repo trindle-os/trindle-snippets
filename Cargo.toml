@@ -1,0 +1,38 @@
+[package]
+name = "trindle-snippets"
+description = "Snippets, Trindle's snippet keeper: find, add and change your text snippets, and copy one to paste anywhere"
+version = "2.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "GPL-3.0-or-later"
+publish = false
+
+[[bin]]
+name = "snippets"
+path = "src/rust/main.rs"
+
+[dependencies]
+toolkit = { package = "trindle-toolkit-link", path = "toolkit-link" }
+libc = "0.2"
+trindle-common = { git = "https://github.com/trindle-os/trindle-toolkit", rev = "3b1e06bc4d4ccb94b9d7b876feecc37aa4765e74" }
+flate2 = "1"
+tar = { version = "0.4.46", default-features = false }
+serde = "1"
+serde_yaml = { package = "serde_norway", version = "0.9" }
+
+[dev-dependencies]
+tiny-skia = { version = "0.12", default-features = false, features = ["std", "simd", "png-format"] }
+trindle-toolkit = { git = "https://github.com/trindle-os/trindle-toolkit", rev = "3b1e06bc4d4ccb94b9d7b876feecc37aa4765e74", features = ["testing"] }
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 4
+strip = "debuginfo"
+panic = "unwind"
+
+[lints.clippy]
+type_complexity = "allow"
+
+[workspace]
+members = [".", "toolkit-link"]

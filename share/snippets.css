@@ -1,0 +1,23 @@
+/* Snippets's own sizes, in points. Every colour, font and shape comes from the
+   Trindle look, so Snippets follows the theme and the highlight. A person's own
+   sheet, ~/.config/trindle/style.css, may set any of these names too; each
+   is held within safe limits, which Snippets's sheet.rs gives beside it. */
+:root {
+  /* The window as it opens. */
+  --snippets-window-width: 1000;
+  --snippets-window-height: 680;
+  /* The snippet list down the left. */
+  --snippets-list-width: 340;
+  /* Room round the window's edge, between its two cards, and inside each. */
+  --snippets-margin: 16;
+  --snippets-between: 12;
+  --snippets-inside: 16;
+  /* Room between the parts of the form, and between buttons in a row. */
+  --snippets-form-gap: 6;
+  --snippets-buttons-gap: 8;
+  /* The replacement box: its least height, and its words' size. */
+  --snippets-replacement-least: 140;
+  --snippets-replacement-size: 15;
+  /* How many letters of a replacement a row of the list shows. */
+  --snippets-preview-letters: 90;
+}
