@@ -31,7 +31,26 @@ fn fit(trigger: &str, replace: &str) -> bool {
         && !replace.is_empty()
         && replace.len() <= LONGEST_REPLACE
         && !replace.contains("{{")
-        && !replace.chars().any(|c| c.is_control() && c != '\n' && c != '\t')
+        && !replace.chars().any(char::is_control)
+}
+
+pub fn wont_expand(triggers: &[String], replace: &str) -> Option<&'static str> {
+    if replace.is_empty() || triggers.is_empty() {
+        return None;
+    }
+    if replace.chars().any(char::is_control) {
+        return Some(t!("snippets-wont-line-break"));
+    }
+    if replace.contains("{{") {
+        return Some(t!("snippets-wont-variable"));
+    }
+    if replace.len() > LONGEST_REPLACE {
+        return Some(t!("snippets-wont-long"));
+    }
+    if !triggers.iter().any(|t| fit(t, replace)) {
+        return Some(t!("snippets-wont-trigger"));
+    }
+    None
 }
 
 pub fn render(entries: &[Entry]) -> String {
@@ -72,19 +91,18 @@ pub fn set_on(folder: &Path, on: bool) -> std::io::Result<()> {
             _ => Ok(()),
         }
     } else {
-        toolkit::common::files::write_whole(&folder.join(OFF_FILE), b"")
+        toolkit::common::files::write_whole_private(&folder.join(OFF_FILE), b"")
     }
 }
 
 pub fn publish(entries: &[Entry], folder: &Path) -> std::io::Result<()> {
     let off = is_off(folder);
-    let ring = if off {
-        "{\"headline\":\"Typing expansion is off\",\"hidden\":[\"off\"]}\n"
-    } else {
-        "{\"headline\":\"Typing expansion is on\",\"hidden\":[\"on\"]}\n"
-    };
-    toolkit::common::files::write_whole(&folder.join("ring.json"), ring.as_bytes())?;
-    toolkit::common::files::write_whole(&folder.join(FILE), render(if off { &[] } else { entries }).as_bytes())
+    let (headline, hidden) = if off { (t!("snippets-expansion-off"), "off") } else { (t!("snippets-expansion-on"), "on") };
+    let mut ring = String::from("{\"headline\":");
+    quote(headline, &mut ring);
+    ring.push_str(&format!(",\"hidden\":[\"{hidden}\"]}}\n"));
+    toolkit::common::files::write_whole_private(&folder.join(FILE), render(if off { &[] } else { entries }).as_bytes())?;
+    toolkit::common::files::write_whole_private(&folder.join("ring.json"), ring.as_bytes())
 }
 
 #[cfg(test)]
@@ -111,7 +129,8 @@ mod tests {
     #[test]
     fn only_plain_snippets_are_offered_with_their_words_exactly() {
         let list = vec![
-            entry(&["tn#", "tnn#"], Some("Line one\n\"two\"\\"), false),
+            entry(&["tn#", "tnn#"], Some("Line one \"two\"\\"), false),
+            entry(&["ml#"], Some("Line one\nline two"), false),
             entry(&["ab"], Some("too short a trigger"), false),
             entry(&["has space"], Some("x"), false),
             entry(&[":v"], Some("Hi {{name}}"), true),
@@ -121,7 +140,7 @@ mod tests {
         let text = render(&list);
         assert_eq!(
             text,
-            "{\"version\":1,\"snippets\":[{\"trigger\":\"tn#\",\"replace\":\"Line one\\n\\\"two\\\"\\\\\",\"word\":false,\"case\":false},{\"trigger\":\"tnn#\",\"replace\":\"Line one\\n\\\"two\\\"\\\\\",\"word\":false,\"case\":false}]}\n"
+            "{\"version\":1,\"snippets\":[{\"trigger\":\"tn#\",\"replace\":\"Line one \\\"two\\\"\\\\\",\"word\":false,\"case\":false},{\"trigger\":\"tnn#\",\"replace\":\"Line one \\\"two\\\"\\\\\",\"word\":false,\"case\":false}]}\n"
         );
     }
 
@@ -162,12 +181,36 @@ mod tests {
             entry(&["esc#"], Some("a\u{1b}b"), false),
             entry(&["cr#"], Some("a\rb"), false),
             entry(&["tab#"], Some("a\tb\nc"), false),
+            entry(&["ok#"], Some("fine"), false),
             picky,
             entry(&["dup#"], Some("first"), false),
             entry(&["dup#"], Some("second"), false),
         ];
         let text = render(&list);
         assert!(!text.contains("esc#") && !text.contains("cr#") && !text.contains("pic#"), "{text}");
-        assert!(text.contains("tab#") && text.contains("first") && !text.contains("second"), "{text}");
+        assert!(!text.contains("tab#") && text.contains("ok#") && text.contains("first") && !text.contains("second"), "{text}");
+    }
+
+    #[test]
+    fn a_snippet_that_will_not_expand_says_why() {
+        let t = |s: &[&str]| s.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        assert!(wont_expand(&t(&[":tm"]), "ok").is_none());
+        assert!(wont_expand(&t(&[":tm"]), "a\nb").unwrap().contains("line break"));
+        assert!(wont_expand(&t(&["ab"]), "ok").unwrap().contains("3 to 32"));
+        assert!(wont_expand(&t(&["ab", ":tm"]), "ok").is_none());
+        assert!(wont_expand(&t(&[":tm"]), "{{x}}").unwrap().contains("variable"));
+        assert!(wont_expand(&t(&[":tm"]), "").is_none());
+    }
+
+    #[test]
+    fn the_published_files_are_for_this_person_alone() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("target").join(format!("mode-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        publish(&[entry(&["tn#"], Some("a"), false)], &dir).unwrap();
+        for name in [FILE, "ring.json"] {
+            assert_eq!(std::fs::metadata(dir.join(name)).unwrap().permissions().mode() & 0o077, 0, "{name}");
+        }
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }

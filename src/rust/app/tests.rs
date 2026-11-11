@@ -28,7 +28,7 @@ fn folder() -> Store {
 }
 
 fn text(store: Store) -> Snippets {
-    Snippets::new(store, Sizes::from(&Layers::new(CSS, "")), Loop::new(), None, None)
+    Snippets::new(store, Sizes::from(&Layers::new(CSS, "")), Loop::new(), None, None, None)
 }
 
 fn typed(t: &mut Snippets, words: &str) {
@@ -246,8 +246,13 @@ fn copy_gives_the_words_of_every_kind_of_snippet_or_says_why_not() {
 
 #[test]
 fn the_starter_snippet_is_tm_and_types_its_words() {
-    let starter = crate::snippets::DEFAULT_MATCHES;
-    assert!(starter.contains("trigger: \":tm\"") && starter.contains("replace: \"Typed by Snippets\""), "{starter}");
+    let store = folder();
+    let _ = fs::remove_dir_all(store.match_dir());
+    store.ensure_skeleton().unwrap();
+    let listing = store.read_all();
+    let tm = listing.entries.iter().find(|e| e.triggers == [":tm".to_string()]).expect("the starter snippet is listed");
+    assert_eq!(tm.replace.as_deref(), Some("Typed by Snippets"));
+    assert!(crate::expand::render(&listing.entries).contains("\"trigger\":\":tm\""));
 }
 
 #[test]
@@ -397,4 +402,18 @@ fn put_back_after_delete_keeps_everything_the_snippet_had() {
     };
     store.delete(&id, &raw).map(|written| store.restore("adv.yml", &written)).unwrap().unwrap();
     assert_eq!(fs::read_to_string(&file).unwrap().trim_end(), body.trim_end());
+}
+
+#[test]
+fn unsaved_words_are_written_after_typing_pauses_not_at_every_letter() {
+    let store = folder();
+    let events = Loop::new();
+    let mut t = Snippets::new(store.clone(), Sizes::from(&Layers::new(CSS, "")), events.clone(), Some(events.post(|_: Do| {})), None, None);
+    t.update(Msg::New);
+    t.update(Msg::Triggers("zz#".into()));
+    typed(&mut t, "kept");
+    assert!(!store.backups.join("unsaved.txt").exists(), "written at a keystroke");
+    t.handle(Do::KeepUnsaved);
+    let kept = fs::read_to_string(store.backups.join("unsaved.txt")).unwrap();
+    assert!(kept.contains("zz#") && kept.contains("kept"), "{kept}");
 }

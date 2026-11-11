@@ -537,11 +537,21 @@ fn an_archive_name_with_dots_cannot_land_outside_the_match_folder() {
     h.set_cksum();
     tar.append(&h, &b"matches: []\n"[..]).unwrap();
     fs::write(&path, tar.into_inner().unwrap().finish().unwrap()).unwrap();
-    let _ = import(&s, &path);
+    let result = import(&s, &path);
     let root = s.match_dir().parent().unwrap().parent().unwrap().to_path_buf();
     assert!(!root.join("evil.yml").exists() && !s.match_dir().parent().unwrap().join("evil.yml").exists());
     let names: Vec<String> = fs::read_dir(s.match_dir()).unwrap().flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect();
     assert!(names.iter().all(|n| n == "evil.yml"), "{names:?}");
+    assert_eq!(result.is_ok(), !names.is_empty(), "{result:?} {names:?}");
+}
+
+#[test]
+fn an_export_that_would_be_too_large_to_import_is_refused() {
+    use std::io::Write;
+    let mut held = Capped(Vec::new());
+    assert!(held.write_all(&[0u8; 1024]).is_ok());
+    assert!(held.write_all(&vec![0u8; TOTAL_MOST as usize]).is_err());
+    assert_eq!(held.0.len(), 1024);
 }
 
 #[test]
@@ -549,7 +559,7 @@ fn a_plain_yml_over_the_size_limit_is_refused_not_read_whole() {
     let s = store();
     let path = s.backups.parent().unwrap().join("big.yml");
     fs::write(&path, vec![b'#'; 9 * 1024 * 1024]).unwrap();
-    assert!(read_import(&path).is_err());
+    assert!(read_import(&path).unwrap_err().contains("too large"));
 }
 
 #[test]
@@ -570,6 +580,9 @@ fn a_link_in_the_snippet_folder_is_exported_as_a_link_not_as_the_words_it_points
     std::os::unix::fs::symlink(&outside, s.match_dir().join("link.yml")).unwrap();
     let out = s.backups.parent().unwrap().join("links.tar.gz");
     s.export(&out).unwrap();
+    let packed = flate2::read::GzDecoder::new(fs::File::open(&out).unwrap());
+    let kinds: Vec<_> = tar::Archive::new(packed).entries().unwrap().flatten().map(|e| (e.path().unwrap().to_string_lossy().into_owned(), e.header().entry_type())).collect();
+    assert!(kinds.iter().any(|(n, k)| n.ends_with("link.yml") && *k == tar::EntryType::Symlink), "{kinds:?}");
     let t = store();
     let _ = import(&t, &out);
     assert!(!fs::read_to_string(t.match_dir().join("link.yml")).unwrap_or_default().contains("outside"));
@@ -589,4 +602,22 @@ fn a_link_in_the_snippet_folder_is_read_only_and_what_it_points_at_is_never_writ
     assert!(s.delete(&e.id, &e.raw).is_err());
     assert!(s.create("link.yml", &fields(&[":p"], "x", false, false)).is_err());
     assert_eq!(fs::read_to_string(&outside).unwrap(), text);
+}
+
+#[test]
+fn backups_of_an_earlier_version_move_to_the_new_folder_once() {
+    let s = store();
+    let base = s.backups.parent().unwrap().join("move-backups");
+    let _ = fs::remove_dir_all(&base);
+    let (old, new) = (base.join("text/backups"), base.join("snippets/backups"));
+    fs::create_dir_all(&old).unwrap();
+    fs::write(old.join("a__base.yml"), "kept").unwrap();
+    assert_eq!(keep_backups_here(&old, new.clone()), new);
+    assert_eq!(fs::read_to_string(new.join("a__base.yml")).unwrap(), "kept");
+    assert!(!old.exists());
+    assert_eq!(keep_backups_here(&old, new.clone()), new);
+    let blocked = base.join("file-in-the-way");
+    fs::create_dir_all(&old).unwrap();
+    fs::write(&blocked, "x").unwrap();
+    assert_eq!(keep_backups_here(&old, blocked.join("backups")), old);
 }

@@ -137,21 +137,21 @@ fn read_list(doc: &Doc) -> Result<List, String> {
         seen_content = true;
         if indent_of(line) > 0 {
             if first_content {
-                return Err("It is indented from its first line, which Snippets does not edit.".into());
+                return Err(t!("snippets-y-first-indent").into());
             }
 
             i += 1;
             continue;
         }
         let Some((name, after)) = key_at(line, 0) else {
-            return Err("It is not a set of named values, as a snippet file is.".into());
+            return Err(t!("snippets-y-not-named").into());
         };
         if name != "matches" {
             i = skip_value(doc, i, 0);
             continue;
         }
         if found.is_some() {
-            return Err("It names matches twice.".into());
+            return Err(t!("snippets-y-matches-twice").into());
         }
         let (list, next) = read_matches(doc, i, after)?;
         found = Some(list);
@@ -162,27 +162,27 @@ fn read_list(doc: &Doc) -> Result<List, String> {
 
 fn refuse_unreadable(i: usize, line: &str) -> Result<(), String> {
     if i == 0 && line.starts_with('\u{feff}') {
-        return Err("It starts with a byte order mark, which Snippets does not edit.".into());
+        return Err(t!("snippets-y-bom").into());
     }
     if line.starts_with('\t') && !blank(line) {
-        return Err("It is indented with tabs, which YAML does not allow.".into());
+        return Err(t!("snippets-y-tabs").into());
     }
     Ok(())
 }
 
 fn document_marker(line: &str, seen_content: bool) -> Result<bool, String> {
     if line.starts_with('%') {
-        return Err("It starts with a YAML directive, which Snippets does not edit.".into());
+        return Err(t!("snippets-y-directive").into());
     }
     let trimmed = line.trim_end();
     if trimmed == "---" || trimmed.starts_with("--- #") {
         if seen_content {
-            return Err("It holds more than one document.".into());
+            return Err(t!("snippets-y-documents").into());
         }
         return Ok(true);
     }
     if trimmed == "..." {
-        return Err("It holds more than one document.".into());
+        return Err(t!("snippets-y-documents").into());
     }
     Ok(false)
 }
@@ -191,7 +191,7 @@ fn read_matches(doc: &Doc, i: usize, after: usize) -> Result<(List, usize), Stri
     let value = strip_comment(&doc.line(i)[after..]);
     let rest = value.trim();
     if !(rest == "[]" || rest.is_empty() || rest == "~" || rest == "null") {
-        return Err("Its snippets are written on one line, which Snippets does not edit.".into());
+        return Err(t!("snippets-y-one-line").into());
     }
     let end = skip_value(doc, i, 0);
     if rest.is_empty() && (i + 1..end).any(|j| content(doc.line(j))) {
@@ -276,7 +276,7 @@ fn read_items(doc: &Doc, key_line: usize) -> Result<(List, usize), String> {
     let first = doc.line(i);
     let dash = indent_of(first);
     if !is_dash(&first[dash..]) {
-        return Err("Its matches are not a list.".into());
+        return Err(t!("snippets-y-matches-not-list").into());
     }
     let mut items = Vec::new();
     while i < n {
@@ -295,7 +295,7 @@ fn read_items(doc: &Doc, key_line: usize) -> Result<(List, usize), String> {
         if ind == 0 {
             break;
         }
-        return Err(format!("Line {} is indented in a way Snippets cannot follow.", i + 1));
+        return Err(t!("snippets-y-line-indent", line = i + 1));
     }
     Ok((List::Items { line: key_line, indent: dash, items }, i))
 }
@@ -332,7 +332,7 @@ fn read_item(doc: &Doc, i: usize, dash: usize) -> (Item, usize) {
         (i + 1..=last).find(|&j| content(doc.line(j))).map(|j| (j, indent_of(doc.line(j))))
     };
     let Some((k, indent)) = first else {
-        item.odd = Some("It is empty.");
+        item.odd = Some(t!("snippets-y-empty"));
         return (item, last + 1);
     };
     item.indent = indent;
@@ -348,15 +348,15 @@ fn read_keys(doc: &Doc, item: &mut Item, (i, mut k, end, last): (usize, usize, u
             continue;
         }
         if indent_of(line) != indent && k != i {
-            item.odd = Some("Its values are indented in a way Snippets cannot follow.");
+            item.odd = Some(t!("snippets-y-item-indent"));
             break;
         }
         let Some((name, after)) = key_at(line, indent) else {
-            item.odd = Some("It is not a set of named values.");
+            item.odd = Some(t!("snippets-y-item-not-named"));
             break;
         };
         if item.keys.iter().any(|key| key.name == name) {
-            item.odd = Some("It names the same value twice.");
+            item.odd = Some(t!("snippets-y-item-twice"));
         }
 
         let under = (k + 1..end).find(|&j| content(doc.line(j)) && indent_of(doc.line(j)) <= indent).unwrap_or(end);

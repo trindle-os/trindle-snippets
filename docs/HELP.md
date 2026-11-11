@@ -46,7 +46,7 @@ Snippets has no settings page. These are the permissions Trindle shows, and the 
 | What | Where |
 |---|---|
 | Snippet files | `~/.config/espanso/match/*.yml`, or `~/.espanso/match/` where that already holds them. As a Trindle plugin, `~` is the plugin's own home. |
-| Backups | `~/.local/share/text/backups`, 20 copies of each file |
+| Backups | `~/.local/share/snippets/backups`, 20 copies of each file |
 | List for typing expansion | `expansions.json` in the plugin's home |
 
 Snippets reads and writes Espanso's file format, so your snippets move between Snippets and Espanso. A save changes only the lines you edited. Comments, order and blank lines stay. A copy of the file is kept first, and the save is refused if that copy cannot be made.

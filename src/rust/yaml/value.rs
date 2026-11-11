@@ -13,11 +13,11 @@ pub fn read_value(inline: &str, below: &[&str], indent: usize) -> (Value, usize)
         return read_nested(below, more, indent);
     }
     match words.chars().next().unwrap_or(' ') {
-        '&' | '*' | '!' => (Value::Odd("It uses an anchor, an alias or a tag."), more),
-        '{' => (Value::Odd("It is a set of values on one line."), more),
+        '&' | '*' | '!' => (Value::Odd(t!("snippets-y-anchor")), more),
+        '{' => (Value::Odd(t!("snippets-y-flow")), more),
         '[' => {
             if more > 0 {
-                return (Value::Odd("A list on more than one line."), more);
+                return (Value::Odd(t!("snippets-y-flow-list")), more);
             }
             (read_flow(words), 0)
         }
@@ -37,12 +37,12 @@ fn read_nested(below: &[&str], more: usize, indent: usize) -> (Value, usize) {
         let ind = indent_of(line);
         let body = &line[ind..];
         if !is_dash(body) || dash.is_some_and(|d| d != ind) || ind < indent {
-            return (Value::Odd("Its values are nested deeper than Snippets edits."), more);
+            return (Value::Odd(t!("snippets-y-deep")), more);
         }
         dash = Some(ind);
         let (value, used) = read_value(&body[1..], &[], ind + 2);
         if used > 0 || matches!(value, Value::List(_)) {
-            return (Value::Odd("Its values are nested deeper than Snippets edits."), more);
+            return (Value::Odd(t!("snippets-y-deep")), more);
         }
         list.push(value);
     }
@@ -51,7 +51,7 @@ fn read_nested(below: &[&str], more: usize, indent: usize) -> (Value, usize) {
 
 fn read_flow(words: &str) -> Value {
     let Some(inner) = words.strip_prefix('[').and_then(|w| w.strip_suffix(']')) else {
-        return Value::Odd("A list Snippets cannot follow.");
+        return Value::Odd(t!("snippets-y-list"));
     };
     let mut out = Vec::new();
     let mut rest = inner.trim();
@@ -59,9 +59,9 @@ fn read_flow(words: &str) -> Value {
         let (value, used) = match rest.chars().next() {
             Some(q @ ('"' | '\'')) => match quoted_end(rest, q) {
                 Some(end) => (read_quoted(&rest[..end], &[]).0, end),
-                None => return Value::Odd("A list Snippets cannot follow."),
+                None => return Value::Odd(t!("snippets-y-list")),
             },
-            Some('[' | '{' | '&' | '*' | '!') => return Value::Odd("A list Snippets cannot follow."),
+            Some('[' | '{' | '&' | '*' | '!') => return Value::Odd(t!("snippets-y-list")),
             _ => {
                 let end = rest.find(',').unwrap_or(rest.len());
                 (plain_value(rest[..end].trim()), end)
@@ -72,7 +72,7 @@ fn read_flow(words: &str) -> Value {
         match rest.strip_prefix(',') {
             Some(r) => rest = r.trim_start(),
             None if rest.is_empty() => {}
-            None => return Value::Odd("A list Snippets cannot follow."),
+            None => return Value::Odd(t!("snippets-y-list")),
         }
     }
     Value::List(out)
@@ -101,16 +101,16 @@ fn read_quoted(first: &str, below: &[&str]) -> (Value, usize) {
     loop {
         if let Some(end) = quoted_end(&whole, q) {
             if content(&whole[end..]) {
-                return (Value::Odd("Words follow its closing quote."), used);
+                return (Value::Odd(t!("snippets-y-after-quote")), used);
             }
             let body = &whole[1..end - 1];
             return match unquote(body, q) {
                 Some(s) => (Value::Str(s), used),
-                None => (Value::Odd("It has an escape Snippets does not know."), used),
+                None => (Value::Odd(t!("snippets-y-escape")), used),
             };
         }
         let Some(next) = below.get(used) else {
-            return (Value::Odd("Its quote is never closed."), used);
+            return (Value::Odd(t!("snippets-y-open-quote")), used);
         };
         whole.push('\n');
         whole.push_str(next);
@@ -203,7 +203,7 @@ fn escape(chars: &[char], at: usize, out: &mut String) -> Option<usize> {
 
 fn read_plain(words: &str, below: &[&str], more: usize) -> (Value, usize) {
     if words.contains(": ") || words.ends_with(':') {
-        return (Value::Odd("It holds a colon that YAML reads as a name."), more);
+        return (Value::Odd(t!("snippets-y-colon")), more);
     }
     if more == 0 {
         return (plain_value(words), 0);
@@ -212,7 +212,7 @@ fn read_plain(words: &str, below: &[&str], more: usize) -> (Value, usize) {
     let mut breaks = 0;
     for line in &below[..more] {
         if comment(line) {
-            return (Value::Odd("A comment breaks its words."), more);
+            return (Value::Odd(t!("snippets-y-comment")), more);
         }
         let t = strip_comment(line).trim();
         if t.is_empty() {
@@ -220,7 +220,7 @@ fn read_plain(words: &str, below: &[&str], more: usize) -> (Value, usize) {
             continue;
         }
         if t.contains(": ") {
-            return (Value::Odd("It holds a colon that YAML reads as a name."), more);
+            return (Value::Odd(t!("snippets-y-colon")), more);
         }
         if breaks == 0 {
             out.push(' ');

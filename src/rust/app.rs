@@ -26,9 +26,13 @@ use view::preview;
 use crate::sheet::Sizes;
 use crate::snippets::{parse_id, read_import, split_triggers, Entry, Fields, Incoming, Listing, Problem, Store};
 
-const UNSAVED: &str = "You have changes that are not saved. Save them, or press Cancel to leave them.";
+fn unsaved() -> &'static str {
+    t!("snippets-unsaved")
+}
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+const UNSAVED_PAUSE: std::time::Duration = std::time::Duration::from_millis(600);
 
 const NEW_ICON: &str = "list-add-symbolic";
 const COPY_ICON: &str = "edit-copy-symbolic";
@@ -39,16 +43,20 @@ const EXPORT_ICON: &str = "send-to-symbolic";
 const RELOAD_ICON: &str = "view-refresh-symbolic";
 
 fn icon(name: &str) -> String {
-    std::env::current_exe()
-        .ok()
-        .and_then(|exe| exe.parent()?.parent().map(|plugin| plugin.join("share/icons").join(format!("{name}.svg"))))
+    static FOLDER: std::sync::OnceLock<Option<std::path::PathBuf>> = std::sync::OnceLock::new();
+    let folder = FOLDER.get_or_init(|| std::env::current_exe().ok().and_then(|exe| exe.parent()?.parent().map(|plugin| plugin.join("share/icons"))));
+    folder
+        .as_ref()
+        .map(|folder| folder.join(format!("{name}.svg")))
         .filter(|path| path.is_file())
         .map_or_else(|| name.to_string(), |path| path.to_string_lossy().into_owned())
 }
 
 const HELD: &str = "\u{a0}";
 
-const NOT_HERE: &str = "Type a trigger such as :tm in any program to expand it, once Snippets is allowed to expand your short codes in its permissions. Or find a snippet and copy it.";
+fn foot_hint() -> &'static str {
+    t!("snippets-foot-hint")
+}
 
 #[derive(Clone, Debug)]
 pub enum Msg {
@@ -86,9 +94,9 @@ pub enum Do {
     Paste(String),
     Restyle,
 
-    Raise,
-
     Unwatched(String),
+
+    KeepUnsaved,
 
     Read(Result<Incoming, String>),
 }
@@ -146,6 +154,8 @@ pub struct Snippets {
     pub window: Weak<Window>,
     events: Loop,
     asks: Option<Post<Do>>,
+
+    unsaved_due: bool,
     bus: Option<Bus>,
     listen: Option<Listen>,
 
@@ -162,7 +172,7 @@ fn new_pane(text: &str, sizes: &Sizes) -> Rc<RefCell<Pane>> {
 }
 
 impl Snippets {
-    pub fn new(store: Store, sizes: Sizes, events: Loop, asks: Option<Post<Do>>, bus: Option<Bus>) -> Snippets {
+    pub fn new(store: Store, sizes: Sizes, events: Loop, asks: Option<Post<Do>>, bus: Option<Bus>, publish_to: Option<PathBuf>) -> Snippets {
         let mut t = Snippets {
             listing: Listing::default(),
             haystacks: Vec::new(),
@@ -183,11 +193,12 @@ impl Snippets {
             naming: None,
             problems: Problems::default(),
             done: None,
-            publish_to: None,
+            publish_to,
             watch_note: None,
             window: Weak::new(),
             events,
             asks,
+            unsaved_due: false,
             bus,
             listen: None,
             at: Rc::new(Cell::new((0.0, 0.0))),
@@ -219,7 +230,7 @@ impl Snippets {
                     self.selected = None;
                     self.opened = None;
                     self.drafting = true;
-                    self.problems.other = Some("That snippet was removed from its file. Your changes are kept; Save adds it again.".into());
+                    self.problems.other = Some(t!("snippets-removed-from-file").into());
                 } else {
                     self.clear_form();
                 }
@@ -231,7 +242,7 @@ impl Snippets {
     fn publish(&mut self) {
         let Some(folder) = &self.publish_to else { return };
         if let Err(why) = crate::expand::publish(&self.listing.entries, folder) {
-            self.problems.other = Some(format!("Typing expansion could not be brought up to date: {why}."));
+            self.problems.other = Some(t!("snippets-publish-failed", why = why.to_string()));
         }
     }
 
@@ -261,9 +272,8 @@ impl Snippets {
         let (shown, all) = (self.visible().len(), self.listing.entries.len());
         match (all, shown == all) {
             (0, _) => String::new(),
-            (1, true) => "1 snippet".into(),
-            (_, true) => format!("{all} snippets"),
-            _ => format!("{shown} of {all} snippets"),
+            (_, true) => t!("snippets-count", count = all),
+            _ => t!("snippets-count-found", shown = shown, all = all),
         }
     }
 
@@ -274,6 +284,15 @@ impl Snippets {
     fn dirty(&self) -> bool {
         let now = self.fields();
         if self.drafting { !now.triggers.is_empty() || !now.replace.is_empty() } else { self.opened.is_some() && now != self.baseline }
+    }
+
+    pub(super) fn keep_unsaved_soon(&mut self) {
+        let Some(asks) = self.asks.clone() else { return self.keep_unsaved() };
+        if !std::mem::replace(&mut self.unsaved_due, true) {
+            self.events.after(UNSAVED_PAUSE, move || {
+                let _ = asks.send(Do::KeepUnsaved);
+            });
+        }
     }
 
     pub fn keep_unsaved(&self) {
@@ -297,7 +316,7 @@ impl Snippets {
         self.triggers = triggers.to_string();
         (self.word, self.case) = (switches.starts_with('w'), switches.ends_with('c'));
         self.pane = new_pane(replace.strip_suffix('\n').unwrap_or(replace), &self.sizes);
-        self.done = Some("The words you had not saved last time are back.".into());
+        self.done = Some(t!("snippets-words-back").into());
     }
 
     fn clear_form(&mut self) {
@@ -335,10 +354,10 @@ impl Snippets {
 
     pub fn copy_words(&self) -> Result<String, &'static str> {
         if self.selected.as_deref().and_then(|id| self.entry(id)).is_some_and(|e| e.advanced.is_some()) {
-            return Err("This snippet uses variables, forms or scripts, which only work where typing expands. There is no plain text to copy.");
+            return Err(t!("snippets-copy-needs-plain"));
         }
         let text = self.pane.borrow().doc.text().to_string();
-        if text.is_empty() { Err("There is nothing in the replacement to copy.") } else { Ok(text) }
+        if text.is_empty() { Err(t!("snippets-copy-empty")) } else { Ok(text) }
     }
 
     pub fn fields(&self) -> Fields {
@@ -397,12 +416,12 @@ impl App for Snippets {
             }
             Msg::Leave => {
                 self.pending = None;
-                self.done = Some("Nothing was imported.".into());
+                self.done = Some(t!("snippets-imported-nothing").into());
             }
             Msg::Export => self.choose(Purpose::Export),
             Msg::Reload => {
                 self.reload();
-                self.done = Some("Read again.".into());
+                self.done = Some(t!("snippets-read-again").into());
             }
         }
     }
@@ -411,7 +430,7 @@ impl App for Snippets {
         let s = &self.sizes;
         column(vec![
             row(vec![self.list_side(), self.form_side()]).gap(s.between).height(Length::Fill),
-            row(vec![note(NOT_HERE), space(), note(format!("Snippets {VERSION}"))]).gap(s.buttons_gap),
+            row(vec![note(foot_hint()), space(), note(t!("snippets-version", version = VERSION))]).gap(s.buttons_gap),
         ])
         .gap(s.between)
         .padding(s.margin)

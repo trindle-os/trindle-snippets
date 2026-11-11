@@ -1,8 +1,9 @@
 //! Snippets: Trindle's snippet keeper. It lists the text snippets in the
 
+#[macro_use]
+mod words;
 mod app;
 mod expand;
-mod once;
 mod sheet;
 mod snippets;
 mod yaml;
@@ -13,7 +14,8 @@ use std::process::ExitCode;
 use std::rc::{Rc, Weak};
 use std::time::Duration;
 
-use toolkit::toolkit::bus::Bus;
+use toolkit::toolkit::bus::{Bus, Served};
+use toolkit::toolkit::once;
 use toolkit::toolkit::event::{Flow, Loop, Post};
 use toolkit::toolkit::ui::Shown;
 use toolkit::toolkit::watch::Watch;
@@ -22,6 +24,7 @@ use toolkit::toolkit::window::{Display, Kind};
 use app::{Do, Snippets};
 
 const APP_ID: &str = "org.trindle.Snippets";
+const PATH: &str = "/org/trindle/Snippets";
 
 const SETTLE: Duration = Duration::from_millis(400);
 
@@ -50,6 +53,12 @@ fn expansion_switch(store: &snippets::Store) -> Option<ExitCode> {
     }
 }
 
+struct Held {
+    shown: Rc<Shown<Snippets>>,
+    _display: Rc<Display>,
+    _raise: Option<Served>,
+}
+
 fn run(store: snippets::Store) -> ExitCode {
     let skeleton = store.ensure_skeleton();
     let events = Loop::new();
@@ -59,28 +68,40 @@ fn run(store: snippets::Store) -> ExitCode {
         return ExitCode::FAILURE;
     };
     let bus = Bus::session(&events).ok();
-    if let Some(bus) = &bus {
-        if once::another_answers(bus, &events) {
-            return ExitCode::SUCCESS;
+    let (held, failed) = (Rc::new(RefCell::new(None)), Rc::new(Cell::new(false)));
+    let (ev, b, h, f) = (events.clone(), bus.clone(), held.clone(), failed.clone());
+    let first = move || match open(&store, &ev, display, &b, skeleton) {
+        Some(opened) => *h.borrow_mut() = Some(opened),
+        None => {
+            f.set(true);
+            ev.quit();
         }
+    };
+    let quit = events.clone();
+    match &bus {
+        Some(bus) => once::claim(bus, &events, APP_ID, PATH, first, move || quit.quit()),
+        None => first(),
     }
+    events.run();
+    if let Some(held) = held.borrow().as_ref() {
+        held.shown.change(|t| t.keep_unsaved());
+    }
+    if failed.get() { ExitCode::FAILURE } else { ExitCode::SUCCESS }
+}
+
+fn open(store: &snippets::Store, events: &Loop, display: Rc<Display>, bus: &Option<Bus>, skeleton: Result<(), String>) -> Option<Held> {
     let slot: Rc<RefCell<Weak<Shown<Snippets>>>> = Rc::new(RefCell::new(Weak::new()));
-    let asks = route_asks(&events, &slot);
-    let (text, size) = new_text(&store, &events, &asks, &bus, skeleton);
+    let asks = route_asks(events, &slot);
+    let (text, size) = new_window(store, events, &asks, bus, skeleton);
     let kind = Kind::Window { title: "Snippets".into(), app_id: APP_ID.into() };
-    let Some(shown) = Shown::open(&events, &display, kind, size, text) else {
+    let Some(shown) = Shown::open(events, &display, kind, size, text) else {
         eprintln!("snippets: the window could not be opened");
-        return ExitCode::FAILURE;
+        return None;
     };
     let shown = Rc::new(shown);
-    wire(&events, &shown, &slot, &asks, &store);
-    let raise = asks.clone();
-    let _served = bus.as_ref().and_then(|b| once::serve(b, move || {
-        let _ = raise.send(Do::Raise);
-    }));
-    events.run();
-    shown.change(|t| t.keep_unsaved());
-    ExitCode::SUCCESS
+    wire(events, &shown, &slot, &asks, store);
+    let raise = bus.as_ref().and_then(|b| once::serve_window(b, PATH, &shown.window).ok());
+    Some(Held { shown, _display: display, _raise: raise })
 }
 
 fn wire(events: &Loop, shown: &Rc<Shown<Snippets>>, slot: &Rc<RefCell<Weak<Shown<Snippets>>>>, asks: &Post<Do>, store: &snippets::Store) {
@@ -91,7 +112,7 @@ fn wire(events: &Loop, shown: &Rc<Shown<Snippets>>, slot: &Rc<RefCell<Weak<Shown
     shown.window.on_close(move || quit.quit());
     quit_on_signals(events);
     if !watch_snippets(events, store.match_dir(), asks.clone()) {
-        shown.change(|t| t.watch_note = Some(NOT_WATCHED.into()));
+        shown.change(|t| t.watch_note = Some(not_watched().into()));
     }
     watch_look(events, asks.clone());
 }
@@ -102,18 +123,15 @@ fn route_asks(events: &Loop, slot: &Rc<RefCell<Weak<Shown<Snippets>>>>) -> Post<
         let Some(shown) = s.borrow().upgrade() else { return };
         match ask {
             Do::Restyle => shown.restyle(),
-            Do::Raise => shown.window.set_visible(true),
             ask => shown.change(|t| t.handle(ask)),
         }
     })
 }
 
-fn new_text(store: &snippets::Store, events: &Loop, asks: &Post<Do>, bus: &Option<Bus>, skeleton: Result<(), String>) -> (Snippets, (u32, u32)) {
+fn new_window(store: &snippets::Store, events: &Loop, asks: &Post<Do>, bus: &Option<Bus>, skeleton: Result<(), String>) -> (Snippets, (u32, u32)) {
     let sizes = sheet::Sizes::read();
     let size = sizes.window;
-    let mut text = Snippets::new(store.clone(), sizes, events.clone(), Some(asks.clone()), bus.clone());
-    text.publish_to = trindle_common::files::home();
-    text.reload();
+    let mut text = Snippets::new(store.clone(), sizes, events.clone(), Some(asks.clone()), bus.clone(), trindle_common::files::home());
     text.restore_unsaved();
     if let Err(why) = skeleton {
         text.problems.other = Some(why);
@@ -175,7 +193,9 @@ fn watch_all(watch: &mut Watch, root: &Path) -> bool {
     folders.iter().fold(!more, |all, f| watch.folder(f).is_ok() && all)
 }
 
-const NOT_WATCHED: &str = "Changes made to the snippet files by other programs may not be noticed. Press the reload button to read them.";
+fn not_watched() -> &'static str {
+    t!("snippets-not-watched")
+}
 
 fn watch_snippets(events: &Loop, root: PathBuf, asks: Post<Do>) -> bool {
     let Ok(mut watch) = Watch::new() else { return false };
@@ -186,7 +206,7 @@ fn watch_snippets(events: &Loop, root: PathBuf, asks: Post<Do>) -> bool {
     let fd = watch.borrow().fd();
     events.watch(fd, move |hung_up| {
         if hung_up {
-            asks.send(Do::Unwatched(NOT_WATCHED.into()));
+            asks.send(Do::Unwatched(not_watched().into()));
             return Flow::Stop;
         }
         let changed = watch.borrow().changed();
@@ -198,7 +218,7 @@ fn watch_snippets(events: &Loop, root: PathBuf, asks: Post<Do>) -> bool {
             waiting.set(false);
 
             if !watch_all(&mut watch.borrow_mut(), &root) {
-                asks.send(Do::Unwatched(NOT_WATCHED.into()));
+                asks.send(Do::Unwatched(not_watched().into()));
             }
             asks.send(Do::Reload);
         });
@@ -226,6 +246,8 @@ fn watch_look(events: &Loop, asks: Post<Do>) {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
     fn no_corner_or_button_size_is_written_here() {
         let mut files = vec![];
@@ -258,8 +280,6 @@ mod tests {
         assert_eq!(asked(&["--expand"]), Some(None));
         assert_eq!(asked(&["--expand", "ON"]), Some(None));
     }
-
-    use super::*;
 
     #[test]
     fn a_folder_tree_over_the_limit_is_cut_and_said_to_be() {

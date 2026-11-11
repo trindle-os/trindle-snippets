@@ -101,7 +101,8 @@ impl Store {
     pub fn usual() -> Option<Store> {
         let legacy = shared::home()?.join(".espanso");
         let config = if legacy.join("match").is_dir() { legacy } else { shared::config_home()?.join("espanso") };
-        Some(Store { config, backups: shared::data_home()?.join("text").join("backups") })
+        let data = shared::data_home()?;
+        Some(Store { config, backups: keep_backups_here(&data.join("text").join("backups"), data.join("snippets").join("backups")) })
     }
 
     pub fn match_dir(&self) -> PathBuf {
@@ -109,7 +110,7 @@ impl Store {
     }
 
     pub fn ensure_skeleton(&self) -> Result<(), String> {
-        let make = |p: &Path| fs::create_dir_all(p).map_err(|e| format!("{} could not be made: {e}", p.display()));
+        let make = |p: &Path| fs::create_dir_all(p).map_err(|e| t!("snippets-dir-failed", path = p.display().to_string(), why = e.to_string()));
         make(&self.config.join("config"))?;
         make(&self.match_dir())?;
         for (path, words) in [(self.config.join("config").join("default.yml"), DEFAULT_CONFIG), (self.match_dir().join("base.yml"), DEFAULT_MATCHES)] {
@@ -159,15 +160,15 @@ impl Store {
     }
 
     fn writable(&self, rel: &str) -> Result<(PathBuf, Doc), Problem> {
-        let path = inside(&self.match_dir(), rel).ok_or_else(|| other("That is not a file Snippets can write to."))?;
+        let path = inside(&self.match_dir(), rel).ok_or_else(|| other(t!("snippets-not-writable")))?;
         if is_package(rel) {
-            return Err(other("This came from an installed package, so it is read-only here."));
+            return Err(other(t!("snippets-from-package")));
         }
         if is_link(&path) {
-            return Err(other("This file is a link to somewhere else, so it is read-only here."));
+            return Err(other(t!("snippets-is-link")));
         }
         let text = read_small(&path).map_err(Problem::Other)?;
-        let doc = yaml::read(&text).map_err(|why| other(format!("{rel} could not be read. {why}")))?;
+        let doc = yaml::read(&text).map_err(|why| other(t!("snippets-file-unreadable", file = rel, why = why)))?;
         Ok((path, doc))
     }
 
@@ -205,7 +206,7 @@ impl Store {
         let (path, doc) = self.writable(&rel)?;
         let item = doc.items().get(index).filter(|i| doc.raw(i) == raw).ok_or_else(changed)?;
         if describe(item).is_some() {
-            return Err(other("Snippets does not write over a snippet it cannot show in full."));
+            return Err(other(t!("snippets-no-overwrite")));
         }
         let text = line_ends(&doc.text, change_item(&doc, item, &fields));
         if text == doc.text {
@@ -236,19 +237,19 @@ impl Store {
         let cleaned = name.strip_suffix(".yml").or_else(|| name.strip_suffix(".yaml")).unwrap_or(name);
         let ok = !cleaned.is_empty() && cleaned.chars().count() <= 60 && cleaned.chars().all(|c| c.is_ascii_alphanumeric() || " _-".contains(c));
         if !ok {
-            return Err("Use letters, numbers, spaces, dashes or underscores.".into());
+            return Err(t!("snippets-file-name-rule").into());
         }
         let rel = format!("{}.yml", cleaned.split_whitespace().collect::<Vec<_>>().join("-").to_lowercase());
-        let path = inside(&self.match_dir(), &rel).ok_or("That name cannot be used.")?;
+        let path = inside(&self.match_dir(), &rel).ok_or(t!("snippets-name-unusable"))?;
         if fs::symlink_metadata(&path).is_ok() {
-            return Err("There is already a file with that name.".into());
+            return Err(t!("snippets-name-taken").into());
         }
         write(&path, &format!("# {cleaned}\n# Made by Snippets.\n\nmatches: []\n")).map_err(|e| e.words().to_string())?;
         Ok(rel)
     }
 
     fn save(&self, path: &Path, rel: &str, text: &str) -> Result<(), Problem> {
-        self.backup(path, rel).map_err(|e| other(format!("Nothing was saved, because a copy of the file could not be kept: {e}")))?;
+        self.backup(path, rel).map_err(|e| other(t!("snippets-backup-failed", why = e.to_string())))?;
         write(path, text)
     }
 
@@ -273,17 +274,17 @@ impl Store {
 
     pub fn export(&self, to: &Path) -> Result<(), String> {
         let root = self.match_dir();
-        let mut packed = Vec::new();
+        let mut packed = Capped(Vec::new());
         {
             let gz = flate2::write::GzEncoder::new(&mut packed, flate2::Compression::default());
             let mut tar = tar::Builder::new(gz);
             tar.follow_symlinks(false);
             tar.mode(tar::HeaderMode::Deterministic);
-            tar.append_dir_all(".", &root).map_err(|e| format!("The snippets could not be packed: {e}"))?;
+            tar.append_dir_all(".", &root).map_err(|_| t!("snippets-too-many-to-pack").to_string())?;
             let gz = tar.into_inner().map_err(|e| e.to_string())?;
             gz.finish().map_err(|e| e.to_string())?;
         }
-        files::write_whole(to, &packed).map_err(|e| format!("{} could not be written: {e}", to.display()))
+        files::write_whole_private(to, &packed.0).map_err(|e| t!("snippets-write-failed", path = to.display().to_string(), why = e.to_string()))
     }
 
     pub fn bring_in(&self, found: Vec<(String, Vec<u8>)>) -> Result<usize, String> {
@@ -291,8 +292,8 @@ impl Store {
         fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
         let mut brought = 0;
         for (name, bytes) in found {
-            let free = free_name(&dir, &clean_name(&name)).ok_or("No free name was left for an imported file.")?;
-            files::write_whole(&dir.join(&free), &bytes).map_err(|e| format!("{free} could not be written: {e}"))?;
+            let free = free_name(&dir, &clean_name(&name)).ok_or(t!("snippets-no-free-name"))?;
+            files::write_whole_private(&dir.join(&free), &bytes).map_err(|e| t!("snippets-write-failed", path = free.clone(), why = e.to_string()))?;
             brought += 1;
         }
         Ok(brought)
@@ -354,45 +355,70 @@ pub fn parse_id(id: &str) -> Option<(String, usize)> {
 
 fn read_small(path: &Path) -> Result<String, String> {
     let mut bytes = Vec::new();
-    fs::File::open(path).and_then(|f| f.take(FILE_MOST + 1).read_to_end(&mut bytes)).map_err(|e| format!("It could not be read: {e}"))?;
+    fs::File::open(path).and_then(|f| f.take(FILE_MOST + 1).read_to_end(&mut bytes)).map_err(|e| t!("snippets-read-failed", why = e.to_string()))?;
     if bytes.len() as u64 > FILE_MOST {
-        return Err("It is too large to be snippets.".into());
+        return Err(t!("snippets-too-large").into());
     }
-    String::from_utf8(bytes).map_err(|_| "It is not written in UTF-8.".into())
+    String::from_utf8(bytes).map_err(|_| t!("snippets-not-utf8").into())
+}
+
+fn keep_backups_here(old: &Path, new: PathBuf) -> PathBuf {
+    if new.exists() || !old.is_dir() {
+        return new;
+    }
+    let moved = new.parent().is_some_and(|parent| fs::create_dir_all(parent).is_ok()) && fs::rename(old, &new).is_ok();
+    if moved { new } else { old.to_path_buf() }
+}
+
+struct Capped(Vec<u8>);
+
+impl std::io::Write for Capped {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        if (self.0.len() + bytes.len()) as u64 > import::TOTAL_MOST {
+            return Err(std::io::Error::other("too large"));
+        }
+        self.0.extend_from_slice(bytes);
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
 }
 
 fn write(path: &Path, text: &str) -> Result<(), Problem> {
-    files::write_whole(path, text.as_bytes()).map_err(|e| other(format!("It could not be saved: {e}")))
+    let put = if path.exists() { files::write_whole } else { files::write_whole_private };
+    put(path, text.as_bytes()).map_err(|e| other(t!("snippets-save-failed", why = e.to_string())))
 }
 
 fn gone() -> Problem {
-    other("That snippet is not there any more. Reload.")
+    other(t!("snippets-snippet-gone"))
 }
 
 fn changed() -> Problem {
-    other("That snippet has changed in its file since it was shown. Reload.")
+    other(t!("snippets-snippet-changed"))
 }
 
 fn unsafe_change() -> Problem {
-    other("Snippets could not save this without changing other snippets, so nothing was written.")
+    other(t!("snippets-unsafe-change"))
 }
 
 pub fn check(fields: &Fields) -> Result<Fields, Problem> {
     let triggers: Vec<String> = fields.triggers.iter().map(|t| t.trim().to_string()).filter(|t| !t.is_empty()).collect();
     if triggers.is_empty() {
-        return Err(Problem::Triggers("Give it at least one trigger."));
+        return Err(Problem::Triggers(t!("snippets-need-trigger")));
     }
     if triggers.iter().any(|t| t.chars().any(char::is_whitespace)) {
-        return Err(Problem::Triggers("A trigger cannot hold spaces. Try :addr."));
+        return Err(Problem::Triggers(t!("snippets-trigger-spaces")));
     }
     if triggers.iter().any(|t| t.chars().count() > TRIGGER_MOST) {
-        return Err(Problem::Triggers("That trigger is too long."));
+        return Err(Problem::Triggers(t!("snippets-trigger-long")));
     }
     if fields.replace.is_empty() {
-        return Err(Problem::Replace("Give it something to turn into."));
+        return Err(Problem::Replace(t!("snippets-need-replace")));
     }
     if fields.replace.chars().count() > REPLACE_MOST {
-        return Err(Problem::Replace("That is too long for a snippet."));
+        return Err(Problem::Replace(t!("snippets-replace-long")));
     }
     Ok(Fields { triggers, ..fields.clone() })
 }
@@ -403,17 +429,17 @@ pub fn split_triggers(typed: &str) -> Vec<String> {
 
 pub fn describe(item: &Item) -> Option<String> {
     if item.odd.is_some() {
-        return Some("This snippet is not in a shape Snippets can edit.".into());
+        return Some(t!("snippets-odd-shape").into());
     }
     let unknown: Vec<&str> = item.keys.iter().map(|k| k.name.as_str()).filter(|n| !SIMPLE.contains(n)).collect();
     if !unknown.is_empty() {
-        return Some(format!("This snippet uses {}, which Snippets shows but does not edit.", unknown.join(", ")));
+        return Some(t!("snippets-odd-uses", names = unknown.join(", ")));
     }
     if item.keys.iter().any(|k| matches!(k.value, Value::Odd(_))) {
-        return Some("This snippet is written in a way Snippets shows but does not edit.".into());
+        return Some(t!("snippets-odd-written").into());
     }
     if !matches!(item.get("replace"), Some(Value::Str(_))) {
-        return Some("This snippet has no plain text to turn into.".into());
+        return Some(t!("snippets-odd-no-text").into());
     }
     None
 }

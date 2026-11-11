@@ -14,15 +14,18 @@ path = "src/rust/main.rs"
 [dependencies]
 toolkit = { package = "trindle-toolkit-link", path = "toolkit-link" }
 libc = "0.2"
-trindle-common = { git = "https://github.com/trindle-os/trindle-toolkit", rev = "3b1e06bc4d4ccb94b9d7b876feecc37aa4765e74" }
+trindle-common = { git = "https://github.com/trindle-os/trindle-toolkit", rev = "7a039de13db7b259629ee19aad62c4b696c40d28" }
 flate2 = "1"
 tar = { version = "0.4.46", default-features = false }
 serde = "1"
 serde_yaml = { package = "serde_norway", version = "0.9" }
 
+[build-dependencies]
+trindle-common = { git = "https://github.com/trindle-os/trindle-toolkit", rev = "7a039de13db7b259629ee19aad62c4b696c40d28" }
+
 [dev-dependencies]
 tiny-skia = { version = "0.12", default-features = false, features = ["std", "simd", "png-format"] }
-trindle-toolkit = { git = "https://github.com/trindle-os/trindle-toolkit", rev = "3b1e06bc4d4ccb94b9d7b876feecc37aa4765e74", features = ["testing"] }
+trindle-toolkit = { git = "https://github.com/trindle-os/trindle-toolkit", rev = "7a039de13db7b259629ee19aad62c4b696c40d28", features = ["testing"] }
 
 [profile.release]
 opt-level = 3

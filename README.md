@@ -65,7 +65,7 @@ Snippets has no settings page of its own. What it may do is set by the permissio
 | What | Where |
 |---|---|
 | Snippet files | `~/.config/espanso/match/*.yml` (or `~/.espanso/match/` where that already holds them); as a plugin, `~` is the plugin's own home |
-| Backups | `~/.local/share/text/backups` |
+| Backups | `~/.local/share/snippets/backups` |
 | List for typing expansion | `expansions.json` in the plugin's home |
 
 Snippets reads and writes Espanso's file format, so snippets move between Snippets and Espanso.

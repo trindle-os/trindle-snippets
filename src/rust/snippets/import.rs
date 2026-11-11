@@ -26,16 +26,16 @@ pub fn read_import(from: &Path) -> Result<Incoming, String> {
         unpack(from)?
     } else if is_yaml(from) {
         let mut bytes = Vec::new();
-        fs::File::open(from).and_then(|f| f.take(FILE_MOST + 1).read_to_end(&mut bytes)).map_err(|e| format!("It could not be read: {e}"))?;
+        fs::File::open(from).and_then(|f| f.take(FILE_MOST + 1).read_to_end(&mut bytes)).map_err(|e| t!("snippets-read-failed", why = e.to_string()))?;
         if bytes.len() as u64 > FILE_MOST {
-            return Err("That file is too large to be snippets.".into());
+            return Err(t!("snippets-import-too-large").into());
         }
         vec![(name, bytes)]
     } else {
-        return Err("Choose a .yml, .yaml or .tar.gz file.".into());
+        return Err(t!("snippets-import-choose").into());
     };
     if files.is_empty() {
-        return Err("No snippet files were found in it.".into());
+        return Err(t!("snippets-import-none").into());
     }
     let risky = files.iter().filter(|(_, bytes)| runs_commands(bytes)).map(|(name, _)| name.clone()).collect();
     Ok(Incoming { files, risky })
@@ -102,12 +102,12 @@ fn unescaped(text: &str) -> String {
 }
 
 pub(super) fn unpack(from: &Path) -> Result<Vec<(String, Vec<u8>)>, String> {
-    let file = fs::File::open(from).map_err(|e| format!("It could not be opened: {e}"))?;
+    let file = fs::File::open(from).map_err(|e| t!("snippets-open-failed", why = e.to_string()))?;
     let mut tar = tar::Archive::new(flate2::read::GzDecoder::new(file).take(INFLATED_MOST));
     let mut out = Vec::new();
     let mut total = 0u64;
-    let too_big = || "That archive is too large, or damaged.".to_string();
-    let entries = tar.entries().map_err(|_| "That archive could not be opened.".to_string())?;
+    let too_big = || t!("snippets-archive-bad").to_string();
+    let entries = tar.entries().map_err(|_| t!("snippets-archive-unopened").to_string())?;
     for entry in entries {
         let mut entry = entry.map_err(|_| too_big())?;
         if entry.header().entry_type() != tar::EntryType::Regular {
@@ -118,14 +118,14 @@ pub(super) fn unpack(from: &Path) -> Result<Vec<(String, Vec<u8>)>, String> {
             continue;
         }
         if entry.size() > FILE_MOST {
-            return Err(format!("{name} is too large to be snippets."));
+            return Err(t!("snippets-import-file-large", name = name.clone()));
         }
         total += entry.size();
         if total > TOTAL_MOST {
-            return Err("That archive holds too much to be snippets.".into());
+            return Err(t!("snippets-archive-much").into());
         }
         if out.len() >= IMPORT_MOST {
-            return Err("That archive holds too many files.".into());
+            return Err(t!("snippets-archive-many").into());
         }
         let mut bytes = Vec::new();
         entry.read_to_end(&mut bytes).map_err(|_| too_big())?;

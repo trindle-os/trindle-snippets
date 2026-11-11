@@ -7,7 +7,7 @@ It writes `expansions.json` in its own home (`~/.local/share/trindle/plugins/org
 
     {"version":1,"snippets":[{"trigger":":tm","replace":"text","word":false,"case":false}]}
 
-Only plain snippets go in: no variables, forms or scripts, trigger 3 to 32 characters with no spaces or control characters, replacement non-empty and at most 4000 bytes, at most 2000 entries. `word` means only when the trigger starts a word; `case` means copy the capitals of what was typed. The starter snippet is `:tm`.
+Only plain snippets go in: no variables, forms or scripts, trigger 3 to 32 characters with no spaces or control characters, replacement non-empty, at most 4000 bytes, with no control characters (no line breaks or tabs), at most 2000 entries. `word` means only when the trigger starts a word; `case` means copy the capitals of what was typed. The starter snippet is `:tm`.
 
 ## What Trindle does
 1. A permission, for example `expand` ("expand your short codes as you type"), off until allowed, with a warning: Trindle watches what you type for the codes and types the words for you.

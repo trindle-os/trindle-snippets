@@ -103,9 +103,9 @@ dependencies = [
 
 [[package]]
 name = "async-executor"
-version = "1.14.1"
+version = "1.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f426a31126c735126297bc5ea7a521263c9faff4f63ca415267ee625651c4f37"
+checksum = "c96bf972d85afc50bf5ab8fe2d54d1586b4e0b46c97c50a0c9e71e2f7bcd812a"
 dependencies = [
  "async-task",
  "concurrent-queue",
@@ -1430,7 +1430,7 @@ dependencies = [
 [[package]]
 name = "trindle-common"
 version = "0.9.0-beta.1"
-source = "git+https://github.com/trindle-os/trindle-toolkit?rev=3b1e06bc4d4ccb94b9d7b876feecc37aa4765e74#3b1e06bc4d4ccb94b9d7b876feecc37aa4765e74"
+source = "git+https://github.com/trindle-os/trindle-toolkit?rev=7a039de13db7b259629ee19aad62c4b696c40d28#7a039de13db7b259629ee19aad62c4b696c40d28"
 dependencies = [
  "libc",
 ]
@@ -1453,7 +1453,7 @@ dependencies = [
 [[package]]
 name = "trindle-toolkit"
 version = "0.9.0-beta.1"
-source = "git+https://github.com/trindle-os/trindle-toolkit?rev=3b1e06bc4d4ccb94b9d7b876feecc37aa4765e74#3b1e06bc4d4ccb94b9d7b876feecc37aa4765e74"
+source = "git+https://github.com/trindle-os/trindle-toolkit?rev=7a039de13db7b259629ee19aad62c4b696c40d28#7a039de13db7b259629ee19aad62c4b696c40d28"
 dependencies = [
  "ab_glyph_rasterizer",
  "accesskit",

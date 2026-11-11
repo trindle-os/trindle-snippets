@@ -42,7 +42,7 @@ impl Snippets {
                 self.read_listing();
                 self.publish();
                 self.select(id);
-                self.done = Some(if added { "Snippet added." } else { "Snippet saved." }.into());
+                self.done = Some(if added { t!("snippets-snippet-added") } else { t!("snippets-snippet-saved") }.into());
                 self.keep_unsaved();
             }
             Err(p) => self.show_problem(p),
@@ -53,7 +53,7 @@ impl Snippets {
         let Some((id, raw)) = self.opened.clone() else { return };
         if !self.sure {
             self.sure = true;
-            self.done = Some("Press delete again to remove this snippet. Cancel keeps it.".into());
+            self.done = Some(t!("snippets-delete-again").into());
             return;
         }
         match self.store.delete(&id, &raw) {
@@ -62,7 +62,7 @@ impl Snippets {
                 self.read_listing();
                 self.publish();
                 self.clear_form();
-                self.done = Some("Snippet deleted. Press put back to undo.".into());
+                self.done = Some(t!("snippets-snippet-deleted").into());
             }
             Err(p) => self.show_problem(p),
         }
@@ -76,7 +76,7 @@ impl Snippets {
                 self.read_listing();
                 self.publish();
                 self.select(Some(id));
-                self.done = Some("Snippet put back.".into());
+                self.done = Some(t!("snippets-snippet-put-back").into());
             }
             Err(p) => self.show_problem(p),
         }
@@ -85,27 +85,27 @@ impl Snippets {
     pub(super) fn choose(&mut self, purpose: Purpose) {
         self.problems = Problems::default();
         let (Some(bus), Some(asks)) = (self.bus.clone(), self.asks.clone()) else {
-            self.problems.other = Some("Files cannot be chosen here.".into());
+            self.problems.other = Some(t!("snippets-cannot-choose").into());
             return;
         };
         let home = trindle_common::files::home();
         self.listen = match purpose {
             Purpose::Import => {
-                let filters = vec![("Snippet files and archives".into(), vec!["*.yml".into(), "*.yaml".into(), "*.tar.gz".into(), "*.tgz".into()])];
-                chooser::open(&bus, &self.events, Ask { title: "Import snippets".into(), folder: home, name: None, filters }, move |p| {
+                let filters = vec![(t!("snippets-choose-filter-import").into(), vec!["*.yml".into(), "*.yaml".into(), "*.tar.gz".into(), "*.tgz".into()])];
+                chooser::open(&bus, &self.events, Ask { title: t!("snippets-choose-import").into(), folder: home, name: None, filters }, move |p| {
                     asks.send(Do::Chosen(purpose, p));
                 })
             }
             Purpose::Export => {
-                let filters = vec![("Snippet archive".into(), vec!["*.tar.gz".into()])];
-                let ask = Ask { title: "Export snippets".into(), folder: home, name: Some("my-snippets.tar.gz".into()), filters };
+                let filters = vec![(t!("snippets-choose-filter-export").into(), vec!["*.tar.gz".into()])];
+                let ask = Ask { title: t!("snippets-choose-export").into(), folder: home, name: Some("my-snippets.tar.gz".into()), filters };
                 chooser::save(&bus, &self.events, ask, move |p| {
                     asks.send(Do::Chosen(purpose, p));
                 })
             }
         };
         if self.listen.is_none() {
-            self.problems.other = Some("The window for choosing files could not be opened.".into());
+            self.problems.other = Some(t!("snippets-chooser-failed").into());
         }
     }
 
@@ -119,11 +119,11 @@ impl Snippets {
         };
         match purpose {
             Purpose::Export => match self.store.export(&path) {
-                Ok(()) => self.done = Some("Snippets exported.".into()),
+                Ok(()) => self.done = Some(t!("snippets-exported").into()),
                 Err(why) => self.problems.other = Some(why),
             },
             Purpose::Import => {
-                self.done = Some("Reading the file.".into());
+                self.done = Some(t!("snippets-reading-file").into());
                 match self.asks.clone() {
                     Some(asks) => {
                         std::thread::spawn(move || {
@@ -154,7 +154,7 @@ impl Snippets {
         match self.store.bring_in(found.files) {
             Ok(n) => {
                 self.reload();
-                self.done = Some(if n == 1 { "Imported 1 file.".into() } else { format!("Imported {n} files.") });
+                self.done = Some(t!("snippets-imported", count = n));
             }
             Err(why) => self.problems.other = Some(why),
         }
@@ -163,6 +163,10 @@ impl Snippets {
     pub fn handle(&mut self, ask: Do) {
         match ask {
             Do::Reload => self.reload(),
+            Do::KeepUnsaved => {
+                self.unsaved_due = false;
+                self.keep_unsaved();
+            }
             Do::Chosen(purpose, path) => self.chosen_file(purpose, path),
             Do::Read(found) => self.read(found),
             Do::Unwatched(why) => self.watch_note = Some(why),
@@ -172,7 +176,7 @@ impl Snippets {
                     pane.paste(&text);
                 }
             }
-            Do::Restyle | Do::Raise => {}
+            Do::Restyle => {}
         }
     }
 
@@ -193,7 +197,7 @@ impl Snippets {
             Did::Edited => {
                 self.problems.replace = None;
                 self.done = None;
-                self.keep_unsaved();
+                self.keep_unsaved_soon();
             }
             Did::Moved | Did::Nothing => {}
         }
@@ -202,7 +206,7 @@ impl Snippets {
     pub(super) fn pick(&mut self, i: usize) {
         let id = self.visible().get(i).map(|e| e.id.clone());
         if id != self.selected && self.dirty() {
-            self.problems.other = Some(UNSAVED.into());
+            self.problems.other = Some(unsaved().into());
             return;
         }
         self.done = None;
@@ -211,7 +215,7 @@ impl Snippets {
 
     pub(super) fn new_snippet(&mut self) {
         if self.dirty() {
-            self.problems.other = Some(UNSAVED.into());
+            self.problems.other = Some(unsaved().into());
         } else {
             self.start_draft();
         }
@@ -222,7 +226,7 @@ impl Snippets {
             self.triggers = typed;
             self.problems.triggers = None;
             self.done = None;
-            self.keep_unsaved();
+            self.keep_unsaved_soon();
         }
     }
 
@@ -265,7 +269,7 @@ impl Snippets {
             Ok(text) => {
                 if let Some(w) = self.window.upgrade() {
                     w.copy(&text);
-                    self.done = Some("Copied. Paste it where you need it.".into());
+                    self.done = Some(t!("snippets-copied").into());
                 }
             }
             Err(why) => self.problems.other = Some(why.into()),

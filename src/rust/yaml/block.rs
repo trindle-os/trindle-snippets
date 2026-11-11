@@ -4,7 +4,7 @@ use super::{blank, indent_of, strip_comment, Value};
 
 pub(super) fn read_block(header: &str, below: &[&str], key: usize) -> (Value, usize) {
     let Some((chomp, given)) = block_header(header, key) else {
-        return (Value::Odd("Its block has a header Snippets does not edit."), below.len());
+        return (Value::Odd(t!("snippets-y-block-header")), below.len());
     };
 
     let ind = given.or_else(|| below.iter().find(|l| !blank(l)).map(|l| indent_of(l)).filter(|&i| i > key));
@@ -18,7 +18,7 @@ pub(super) fn read_block(header: &str, below: &[&str], key: usize) -> (Value, us
         return (Value::Str(String::new()), if chomp == '+' { below.len() } else { 0 });
     };
     let Some(rows) = block_rows(&below[..content_lines], ind) else {
-        return (Value::Odd("Its block is indented in a way Snippets cannot follow."), content_lines);
+        return (Value::Odd(t!("snippets-y-block-indent")), content_lines);
     };
     let mut out = if header.starts_with('>') { fold(&rows) } else { rows.join("\n") };
     let used = match chomp {

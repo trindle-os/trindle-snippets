@@ -12,6 +12,9 @@ Notable changes to Snippets.
 - A snippet file that is a link to another file is read-only: Snippets never writes through a link.
 - Search marks the letters it matched.
 - Copy says why when there is nothing to copy.
+- All the words are in `share/lang/en/snippets.ftl`, ready to be translated.
+- A snippet that cannot expand as typed says why under its replacement.
+- Backups are kept in `~/.local/share/snippets/backups`; an earlier `text/backups` folder is moved there.
 - Fixes from a code review:
   - Save and delete go by the snippet as you opened it, so an outside edit is reported, not overwritten.
   - Unsaved words are kept when you pick another snippet, press New or close the window.
