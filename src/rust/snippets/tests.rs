@@ -227,7 +227,7 @@ fn a_file_that_cannot_be_read_says_why_and_is_left_alone() {
 
 #[test]
 fn the_form_is_checked_in_plain_words() {
-    assert_eq!(check(&fields(&[" ", ""], "x", false, false)), Err(Problem::Triggers("Give it at least one trigger.")));
+    assert_eq!(check(&fields(&[" ", ""], "x", false, false)), Err(Problem::Triggers("Add at least one trigger.")));
     assert!(matches!(check(&fields(&["a b"], "x", false, false)), Err(Problem::Triggers(_))));
     assert!(matches!(check(&fields(&[&"x".repeat(101)], "x", false, false)), Err(Problem::Triggers(_))));
     assert!(matches!(check(&fields(&[":a"], "", false, false)), Err(Problem::Replace(_))));

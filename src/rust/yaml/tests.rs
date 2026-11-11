@@ -71,8 +71,8 @@ fn escapes_and_folds_in_quotes_are_undone() {
 #[test]
 fn files_text_cannot_follow_say_why() {
     assert!(read("matches:\n\t- trigger: a\n").unwrap_err().contains("tabs"));
-    assert!(read("  matches:\n    - trigger: a\n      replace: b\n").unwrap_err().contains("indented from its first line"));
-    assert!(read("# note\n\n  matches: []\n").unwrap_err().contains("indented from its first line"));
+    assert!(read("  matches:\n    - trigger: a\n      replace: b\n").unwrap_err().contains("first line is indented"));
+    assert!(read("# note\n\n  matches: []\n").unwrap_err().contains("first line is indented"));
     assert!(read("\tmatches: []\n").is_err());
     assert!(read("- a\n- b\n").is_err());
     assert!(read("matches: [{trigger: a, replace: b}]\n").is_err());

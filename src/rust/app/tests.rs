@@ -84,10 +84,10 @@ fn a_new_snippet_is_checked_then_added() {
     t.update(Msg::New);
     assert!(t.drafting);
     t.update(Msg::Save);
-    assert_eq!(t.problems.triggers.as_deref(), Some("Give it at least one trigger."));
+    assert_eq!(t.problems.triggers.as_deref(), Some("Add at least one trigger."));
     t.update(Msg::Triggers(":tel".into()));
     t.update(Msg::Save);
-    assert_eq!(t.problems.replace.as_deref(), Some("Give it something to turn into."));
+    assert_eq!(t.problems.replace.as_deref(), Some("Add the replacement text."));
     typed(&mut t, "07700 900123");
     t.update(Msg::Save);
     assert_eq!(t.done.as_deref(), Some("Snippet added."));
@@ -125,7 +125,7 @@ fn deleting_and_putting_back() {
     assert_eq!(t.listing.entries.len(), 4);
     assert!(t.done.as_deref().is_some_and(|w| w.contains("again")));
     t.update(Msg::Delete);
-    assert_eq!(t.done.as_deref(), Some("Snippet deleted. Press put back to undo."));
+    assert_eq!(t.done.as_deref(), Some("Snippet deleted. Press Restore to undo."));
     assert_eq!(t.listing.entries.len(), 3);
     assert!(t.selected.is_none());
     t.update(Msg::PutBack);
@@ -281,7 +281,7 @@ fn unsaved_words_are_not_dropped_by_picking_or_new_and_are_kept_on_closing() {
     typed(&mut t, "Dr ");
     t.update(Msg::Pick(0));
     assert_eq!(t.pane.borrow().doc.text(), "Dr John Smith");
-    assert!(t.problems.other.as_deref().is_some_and(|w| w.contains("not saved")));
+    assert!(t.problems.other.as_deref().is_some_and(|w| w.contains("unsaved")));
     t.update(Msg::New);
     assert!(!t.drafting);
     t.keep_unsaved();
@@ -336,7 +336,7 @@ fn the_list_for_typing_is_written_where_told_and_a_failure_is_said() {
     t.publish_to = Some(out.join("missing/dir/blocked"));
     fs::write(out.join("missing"), "a file, not a folder").unwrap();
     t.reload();
-    assert!(t.problems.other.as_deref().is_some_and(|w| w.contains("Typing expansion")));
+    assert!(t.problems.other.as_deref().is_some_and(|w| w.contains("typing expansion")));
 }
 
 #[test]
